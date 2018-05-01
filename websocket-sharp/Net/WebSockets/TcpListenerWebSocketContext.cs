@@ -52,15 +52,16 @@ namespace WebSocketSharp.Net.WebSockets
   {
     #region Private Fields
 
-    private CookieCollection    _cookies;
     private Logger              _log;
     private NameValueCollection _queryString;
     private HttpRequest         _request;
+    private Uri                 _requestUri;
     private bool                _secure;
+    private System.Net.EndPoint _serverEndPoint;
     private Stream              _stream;
     private TcpClient           _tcpClient;
-    private Uri                 _uri;
     private IPrincipal          _user;
+    private System.Net.EndPoint _userEndPoint;
     private WebSocket           _websocket;
 
     #endregion
@@ -100,6 +101,10 @@ namespace WebSocketSharp.Net.WebSockets
         _stream = netStream;
       }
 
+      var sock = tcpClient.Client;
+      _serverEndPoint = sock.LocalEndPoint;
+      _userEndPoint = sock.RemoteEndPoint;
+
       _request = HttpRequest.Read (_stream, 90000);
       _websocket = new WebSocket (this, protocol);
     }
@@ -125,19 +130,25 @@ namespace WebSocketSharp.Net.WebSockets
     #region Public Properties
 
     /// <summary>
-    /// Gets the HTTP cookies included in the request.
+    /// Gets the HTTP cookies included in the handshake request.
     /// </summary>
     /// <value>
-    /// A <see cref="WebSocketSharp.Net.CookieCollection"/> that contains the cookies.
+    ///   <para>
+    ///   A <see cref="WebSocketSharp.Net.CookieCollection"/> that contains
+    ///   the cookies.
+    ///   </para>
+    ///   <para>
+    ///   An empty collection if not included.
+    ///   </para>
     /// </value>
     public override CookieCollection CookieCollection {
       get {
-        return _cookies ?? (_cookies = _request.Cookies);
+        return _request.Cookies;
       }
     }
 
     /// <summary>
-    /// Gets the HTTP headers included in the request.
+    /// Gets the HTTP headers included in the handshake request.
     /// </summary>
     /// <value>
     /// A <see cref="NameValueCollection"/> that contains the headers.
@@ -149,10 +160,16 @@ namespace WebSocketSharp.Net.WebSockets
     }
 
     /// <summary>
-    /// Gets the value of the Host header included in the request.
+    /// Gets the value of the Host header included in the handshake request.
     /// </summary>
     /// <value>
-    /// A <see cref="string"/> that represents the value of the Host header.
+    ///   <para>
+    ///   A <see cref="string"/> that represents the server host name requested
+    ///   by the client.
+    ///   </para>
+    ///   <para>
+    ///   It includes the port number if provided.
+    ///   </para>
     /// </value>
     public override string Host {
       get {
@@ -173,10 +190,12 @@ namespace WebSocketSharp.Net.WebSockets
     }
 
     /// <summary>
-    /// Gets a value indicating whether the client connected from the local computer.
+    /// Gets a value indicating whether the handshake request is sent from
+    /// the local computer.
     /// </summary>
     /// <value>
-    /// <c>true</c> if the client connected from the local computer; otherwise, <c>false</c>.
+    /// <c>true</c> if the handshake request is sent from the same computer
+    /// as the server; otherwise, <c>false</c>.
     /// </value>
     public override bool IsLocal {
       get {
@@ -185,10 +204,11 @@ namespace WebSocketSharp.Net.WebSockets
     }
 
     /// <summary>
-    /// Gets a value indicating whether the WebSocket connection is secured.
+    /// Gets a value indicating whether a secure connection is used to send
+    /// the handshake request.
     /// </summary>
     /// <value>
-    /// <c>true</c> if the connection is secured; otherwise, <c>false</c>.
+    /// <c>true</c> if the connection is secure; otherwise, <c>false</c>.
     /// </value>
     public override bool IsSecureConnection {
       get {
@@ -197,10 +217,12 @@ namespace WebSocketSharp.Net.WebSockets
     }
 
     /// <summary>
-    /// Gets a value indicating whether the request is a WebSocket handshake request.
+    /// Gets a value indicating whether the request is a WebSocket handshake
+    /// request.
     /// </summary>
     /// <value>
-    /// <c>true</c> if the request is a WebSocket handshake request; otherwise, <c>false</c>.
+    /// <c>true</c> if the request is a WebSocket handshake request; otherwise,
+    /// <c>false</c>.
     /// </value>
     public override bool IsWebSocketRequest {
       get {
@@ -209,10 +231,15 @@ namespace WebSocketSharp.Net.WebSockets
     }
 
     /// <summary>
-    /// Gets the value of the Origin header included in the request.
+    /// Gets the value of the Origin header included in the handshake request.
     /// </summary>
     /// <value>
-    /// A <see cref="string"/> that represents the value of the Origin header.
+    ///   <para>
+    ///   A <see cref="string"/> that represents the value of the Origin header.
+    ///   </para>
+    ///   <para>
+    ///   <see langword="null"/> if the header is not present.
+    ///   </para>
     /// </value>
     public override string Origin {
       get {
@@ -259,28 +286,35 @@ namespace WebSocketSharp.Net.WebSockets
     /// </value>
     public override Uri RequestUri {
       get {
-        if (_uri == null) {
-          _uri = HttpUtility.CreateRequestUrl (
-                   _request.RequestUri,
-                   _request.Headers["Host"],
-                   _request.IsWebSocketRequest,
-                   _secure
-                 );
+        if (_requestUri == null) {
+          _requestUri = HttpUtility.CreateRequestUrl (
+                          _request.RequestUri,
+                          _request.Headers["Host"],
+                          _request.IsWebSocketRequest,
+                          _secure
+                        );
         }
 
-        return _uri;
+        return _requestUri;
       }
     }
 
     /// <summary>
-    /// Gets the value of the Sec-WebSocket-Key header included in the request.
+    /// Gets the value of the Sec-WebSocket-Key header included in
+    /// the handshake request.
     /// </summary>
-    /// <remarks>
-    /// This property provides a part of the information used by the server to prove that
-    /// it received a valid WebSocket handshake request.
-    /// </remarks>
     /// <value>
-    /// A <see cref="string"/> that represents the value of the Sec-WebSocket-Key header.
+    ///   <para>
+    ///   A <see cref="string"/> that represents the value of
+    ///   the Sec-WebSocket-Key header.
+    ///   </para>
+    ///   <para>
+    ///   The value is used to prove that the server received
+    ///   a valid WebSocket handshake request.
+    ///   </para>
+    ///   <para>
+    ///   <see langword="null"/> if the header is not present.
+    ///   </para>
     /// </value>
     public override string SecWebSocketKey {
       get {
@@ -319,13 +353,17 @@ namespace WebSocketSharp.Net.WebSockets
     }
 
     /// <summary>
-    /// Gets the value of the Sec-WebSocket-Version header included in the request.
+    /// Gets the value of the Sec-WebSocket-Version header included in
+    /// the handshake request.
     /// </summary>
-    /// <remarks>
-    /// This property represents the WebSocket protocol version.
-    /// </remarks>
     /// <value>
-    /// A <see cref="string"/> that represents the value of the Sec-WebSocket-Version header.
+    ///   <para>
+    ///   A <see cref="string"/> that represents the WebSocket protocol
+    ///   version specified by the client.
+    ///   </para>
+    ///   <para>
+    ///   <see langword="null"/> if the header is not present.
+    ///   </para>
     /// </value>
     public override string SecWebSocketVersion {
       get {
@@ -334,22 +372,29 @@ namespace WebSocketSharp.Net.WebSockets
     }
 
     /// <summary>
-    /// Gets the server endpoint as an IP address and a port number.
+    /// Gets the endpoint to which the handshake request is sent.
     /// </summary>
     /// <value>
-    /// A <see cref="System.Net.IPEndPoint"/> that represents the server endpoint.
+    /// A <see cref="System.Net.IPEndPoint"/> that represents the server IP
+    /// address and port number.
     /// </value>
     public override System.Net.IPEndPoint ServerEndPoint {
       get {
-        return (System.Net.IPEndPoint) _tcpClient.Client.LocalEndPoint;
+        return (System.Net.IPEndPoint) _serverEndPoint;
       }
     }
 
     /// <summary>
-    /// Gets the client information (identity, authentication, and security roles).
+    /// Gets the client information.
     /// </summary>
     /// <value>
-    /// A <see cref="IPrincipal"/> instance that represents the client information.
+    ///   <para>
+    ///   A <see cref="IPrincipal"/> instance that represents identity,
+    ///   authentication, and security roles for the client.
+    ///   </para>
+    ///   <para>
+    ///   <see langword="null"/> if the client is not authenticated.
+    ///   </para>
     /// </value>
     public override IPrincipal User {
       get {
@@ -358,14 +403,15 @@ namespace WebSocketSharp.Net.WebSockets
     }
 
     /// <summary>
-    /// Gets the client endpoint as an IP address and a port number.
+    /// Gets the endpoint from which the handshake request is sent.
     /// </summary>
     /// <value>
-    /// A <see cref="System.Net.IPEndPoint"/> that represents the client endpoint.
+    /// A <see cref="System.Net.IPEndPoint"/> that represents the client IP
+    /// address and port number.
     /// </value>
     public override System.Net.IPEndPoint UserEndPoint {
       get {
-        return (System.Net.IPEndPoint) _tcpClient.Client.RemoteEndPoint;
+        return (System.Net.IPEndPoint) _userEndPoint;
       }
     }
 
@@ -384,6 +430,19 @@ namespace WebSocketSharp.Net.WebSockets
 
     #endregion
 
+    #region Private Methods
+
+    private HttpRequest sendAuthenticationChallenge (string challenge)
+    {
+      var res = HttpResponse.CreateUnauthorizedResponse (challenge);
+      var bytes = res.ToByteArray ();
+      _stream.Write (bytes, 0, bytes.Length);
+
+      return HttpRequest.Read (_stream, 15000);
+    }
+
+    #endregion
+
     #region Internal Methods
 
     internal bool Authenticate (
@@ -392,14 +451,6 @@ namespace WebSocketSharp.Net.WebSockets
       Func<IIdentity, NetworkCredential> credentialsFinder
     )
     {
-      if (scheme == AuthenticationSchemes.Anonymous)
-        return true;
-
-      if (scheme == AuthenticationSchemes.None) {
-        Close (HttpStatusCode.Forbidden);
-        return false;
-      }
-
       var chal = new AuthenticationChallenge (scheme, realm).ToString ();
 
       var retry = -1;
@@ -407,27 +458,24 @@ namespace WebSocketSharp.Net.WebSockets
       auth =
         () => {
           retry++;
-          if (retry > 99) {
-            Close (HttpStatusCode.Forbidden);
+          if (retry > 99)
             return false;
+
+          var user = HttpUtility.CreateUser (
+                       _request.Headers["Authorization"],
+                       scheme,
+                       realm,
+                       _request.HttpMethod,
+                       credentialsFinder
+                     );
+
+          if (user != null && user.Identity.IsAuthenticated) {
+            _user = user;
+            return true;
           }
 
-          var user =
-            HttpUtility.CreateUser (
-              _request.Headers["Authorization"],
-              scheme,
-              realm,
-              _request.HttpMethod,
-              credentialsFinder
-            );
-
-          if (user == null || !user.Identity.IsAuthenticated) {
-            SendAuthenticationChallenge (chal);
-            return auth ();
-          }
-
-          _user = user;
-          return true;
+          _request = sendAuthenticationChallenge (chal);
+          return auth ();
         };
 
       return auth ();
@@ -441,14 +489,12 @@ namespace WebSocketSharp.Net.WebSockets
 
     internal void Close (HttpStatusCode code)
     {
-      _websocket.Close (HttpResponse.CreateCloseResponse (code));
-    }
+      var res = HttpResponse.CreateCloseResponse (code);
+      var bytes = res.ToByteArray ();
+      _stream.Write (bytes, 0, bytes.Length);
 
-    internal void SendAuthenticationChallenge (string challenge)
-    {
-      var buff = HttpResponse.CreateUnauthorizedResponse (challenge).ToByteArray ();
-      _stream.Write (buff, 0, buff.Length);
-      _request = HttpRequest.Read (_stream, 15000);
+      _stream.Close ();
+      _tcpClient.Close ();
     }
 
     #endregion
